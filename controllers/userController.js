@@ -28,8 +28,8 @@ const login = async (req, res, next) => {
 
     const token = jwt.sign({ id: userExists._id }, process.env.JWT_SECRET)
     const { password:pass, ...userNoPassword } = userExists._doc
-    res
-        .cookie('access_token', token, { httpOnly: true } )
+
+    res.cookie('access_token', token, { httpOnly: false, sameSite: 'None', secure: true })
         .status(200)
         .json({ userNoPassword, message: 'Logged in successfully' })
 }
@@ -40,7 +40,7 @@ const signup = async (req, res, next) => {
 
     const userExists = await User.findOne({ email })
     if (userExists) {
-        const err = Error('User already exists, Log in!')
+        const err = new Error('User already exists, Log in!')
         err.status = 400
         return next(err)
     }
@@ -83,6 +83,11 @@ const logout = async (req, res, next) => {
 //Delete User
 const deleteUser = async (req, res) => {
     const { id } = req.params
+    if (req.user.id !== id) {
+        const error = new Error('You can only delete your own account')
+        error.status = 401
+        next(error)
+    }
 
     try {
         await User.findByIdAndDelete(id)
@@ -99,6 +104,12 @@ const deleteUser = async (req, res) => {
 //Update User
 const updateUser = async (req, res, next) => {
     const userId = req.params.id
+    if (req.user.id !== userId) {
+        const error = new Error('You can only update your own account')
+        error.status = 401
+        next(error)
+    }
+
     const { name, email, password } = req.body
 
     let updatedUserData = {
@@ -123,4 +134,47 @@ const updateUser = async (req, res, next) => {
     res.status(200).json({ message: 'Updated User successfully', newUser })
 }
 
-export { login, signup, updateUser, logout, deleteUser}
+const signupUsingGoogle = async (req, res, next) => {
+    const { name, email, image } = req.body
+
+    const userAlreadyCreated = await User.findOne({ email })
+
+    if (userAlreadyCreated) {
+        const token = jwt.sign({ id: userAlreadyCreated._id }, process.env.JWT_SECRET)
+        const { password:pass, ...userNoPassword } = userAlreadyCreated._doc
+    
+        res.cookie('access_token', token, { httpOnly: false, sameSite: 'None', secure: true })
+            .status(200)
+            .json({ userNoPassword, message: 'Logged in successfully' })
+
+    } else {
+        let generatePassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8) 
+        const hashedGenPassword = await bcrypt.hash(generatePassword, 12)
+    
+        const newGoogleUser = new User({
+            name, 
+            email,
+            image,
+            password: hashedGenPassword
+        })
+    
+        try {
+            await newGoogleUser.save()
+        } catch (error) {
+            const err = new Error('Something went wrong! Could not signup user.')
+            err.status = 500
+            next(err)
+        }    
+    
+        const token = jwt.sign({ id: newGoogleUser._id }, process.env.JWT_SECRET)
+        const { password:pass, ...userNoPassword } = newGoogleUser._doc
+    
+        res.cookie('access_token', token, { httpOnly: false, sameSite: 'None', secure: true })
+            .status(200)
+            .json({ userNoPassword, message: 'Signup was successfully' })
+    }
+
+}
+
+
+export { login, signup, updateUser, logout, deleteUser, signupUsingGoogle}
