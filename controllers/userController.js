@@ -1,38 +1,48 @@
 import bcrypt from 'bcrypt'
 import User from "../models/userModal.js"
+import jwt from 'jsonwebtoken'
 
 //Login user 
-const login = async (req, res) => {
+const login = async (req, res, next) => {
     const { email, password } = req.body
 
     const userExists = await User.findOne({ email })
     if (!userExists) {
-        res.status(401)
-        throw new Error('Invalid credentials, Could not log in')
-    }
-
-    let isValidPassword
-    try {
-        isValidPassword = await bcrypt.compare(password, userExists.password)
-    } catch (error) {
-        res.status(401)
-        throw new Error('Wrong Credentials, Try again later')
+        const error = new Error('Invalid credentials, Could not log in');
+        error.status = 401;
+        return next(error);
     }
     
-    if (userExists && isValidPassword) {
-        res.status(200).json({ userExists, message: 'Logged in successfully' })
+    const isValidPassword = await bcrypt.compare(password, userExists.password)
+    if (!isValidPassword) {
+        const err = new Error('Wrong Credentials, Try again later')
+        err.status = 401
+        return next(err)
+    }
+    
+    if (!userExists && !isValidPassword) {
+        const error = new Error('No User! Sign Up');
+        error.status = 401;
+        return next(error);
     }
 
+    const token = jwt.sign({ id: userExists._id }, process.env.JWT_SECRET)
+    const { password:pass, ...userNoPassword } = userExists._doc
+    res
+        .cookie('access_token', token, { httpOnly: true } )
+        .status(200)
+        .json({ userNoPassword, message: 'Logged in successfully' })
 }
 
 //Signup user
-const signup = async (req, res) => {
+const signup = async (req, res, next) => {
     const { name, email, password} = req.body
 
     const userExists = await User.findOne({ email })
     if (userExists) {
-        res.status(400)
-        throw new Error('User already exists, Log in!')
+        const err = Error('User already exists, Log in!')
+        err.status = 400
+        return next(err)
     }
 
     const hashedPassword = await bcrypt.hash(password, 12)
@@ -48,21 +58,27 @@ const signup = async (req, res) => {
         await newUser.save()
 
     } catch (error) {
-        res.status(400)
-        throw new Error('Something went wrong')
+        const err = new Error('Something went wrong')
+        err.status = 400
+        next(err)
     }
 
     if (newUser) {
         res.status(201).json({newUser, message: 'Signup was successfully'})
     }
-
 }
 
 
 //Logout user
-const logout = async () => {
-    res.status(200).json({ message: "Logout Works"})
+const logout = async (req, res, next) => {
+    try {
+        res.clearCookie('access_token')
+        res.status(200).json({ message: "Successfully logged Out!"})
+    } catch (error) {
+        next(error)
+    }
 }
+
 
 //Delete User
 const deleteUser = async (req, res) => {
@@ -71,51 +87,40 @@ const deleteUser = async (req, res) => {
     try {
         await User.findByIdAndDelete(id)
     } catch (error) {
-        res.status(404)
-        throw new Error('Could not delete User')
+        const err = new Error('Could not delete User')
+        err.status = 404
+        next(err)
     }
 
     res.status(200).json({ message: 'Successfully deleted User'})
 }
 
 
-//Get user data
-const getProfile = async (req, res) => {
-    const userId = req.params.id
-
-    let userProfile
-    try {
-        userProfile = await User.findById(userId)
-    } catch (error) {
-        res.status(401)
-        throw new Error('Something went wrong, Could not find user')
-    }
-
-    res.status(200).json({ userProfile })
-}
-
 //Update User
-const updateUser = async (req, res) => {
+const updateUser = async (req, res, next) => {
     const userId = req.params.id
     const { name, email, password } = req.body
 
-    const hashedPassword = await bcrypt.hash(password, 12)
-
-    let updatedUser = {
+    let updatedUserData = {
         name,
         email,
-        password:hashedPassword
+    }
+
+    if (password) {
+        const hashedPassword = await bcrypt.hash(password, 12)
+        updatedUserData.password = hashedPassword
     }
 
     let newUser
     try {
-        newUser = await User.findByIdAndUpdate(userId, updatedUser, { new: true })
+        newUser = await User.findByIdAndUpdate(userId, updatedUserData, { new: true })
     } catch (error) {
-        res.status(401)
-        throw new Error('Update Failed! Could not find user with the specified id')
+        const err = new Error('Update Failed! Could not find user with the specified id')
+        err.status = 401
+        next(err)
     }
 
     res.status(200).json({ message: 'Updated User successfully', newUser })
 }
 
-export { login, signup, getProfile, updateUser, logout, deleteUser}
+export { login, signup, updateUser, logout, deleteUser}
