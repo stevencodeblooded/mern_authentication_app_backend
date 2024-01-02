@@ -20,6 +20,9 @@ app.use(cors(corsOptions));
 app.use(cookieParser())
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true}))
+app.get('/', (req, res) => {
+    res.json('Servre Working')
+})
 
 //user routes
 app.use('/api/users', userRoutes)
