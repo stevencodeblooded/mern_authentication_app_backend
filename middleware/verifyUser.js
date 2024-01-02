@@ -3,8 +3,6 @@ import jwt  from "jsonwebtoken"
 export const verifyToken = (req, res, next) => {
     const token = req.cookies.access_token
 
-    console.log(req.cookies);
-
     if (!token) {
         const error = new Error('Unathorised, No token provided!')
         error.status = 401
@@ -19,8 +17,6 @@ export const verifyToken = (req, res, next) => {
         }
 
         req.user = user
-        console.log("USER:", user);
-        console.log("TOKEN:", token);
         next()
     })
     

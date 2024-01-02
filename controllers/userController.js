@@ -110,11 +110,12 @@ const updateUser = async (req, res, next) => {
         next(error)
     }
 
-    const { name, email, password } = req.body
+    const { name, email, image, password } = req.body
 
     let updatedUserData = {
         name,
         email,
+        image
     }
 
     if (password) {
