@@ -21,7 +21,7 @@ const login = async (req, res, next) => {
     }
     
     if (!userExists && !isValidPassword) {
-        const error = new Error('No User! Sign Up');
+        const error = new Error('User not Found! Sign Up');
         error.status = 401;
         return next(error);
     }
@@ -135,6 +135,7 @@ const updateUser = async (req, res, next) => {
     res.status(200).json({ message: 'Updated User successfully', newUser })
 }
 
+//SIGNUP GOOGLE AUTH
 const signupUsingGoogle = async (req, res, next) => {
     const { name, email, image } = req.body
 
